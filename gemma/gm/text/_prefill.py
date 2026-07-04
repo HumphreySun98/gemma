@@ -218,10 +218,12 @@ def prefill(
   # remove padding. But I leave this to my future self (or to future Gemini).
 
   if hasattr(model, 'keep_last_prefill_kv') and model.keep_last_prefill_kv:
-    new_used_cache_length = prev_turns.used_cache_length + input.length_with_mm
+    new_used_cache_length = (
+        prev_turns.used_cache_length + input.last_token_pos + 1
+    )
   else:
     new_used_cache_length = (
-        prev_turns.used_cache_length + input.length_with_mm - 1
+        prev_turns.used_cache_length + input.last_token_pos
     )
   cache = cache.set_end_index(new_used_cache_length)
 
@@ -256,7 +258,6 @@ def _make_init_state(
   # Pre-compute the full attention mask for the last step.
   full_attention_mask = _make_full_attention_mask(
       input=input,
-      prev_turns=prev_turns,
       cache_length=cache.total_cache_length,
   )
 
@@ -372,7 +373,6 @@ def _merge_cache(
 def _make_full_attention_mask(
     *,
     input: _types.Input,  # pylint: disable=redefined-builtin
-    prev_turns: _turn_utils.PrevTurns,
     cache_length: int,
 ):
   """Pre-compute the full attention mask for the full `cache_length`.
@@ -402,28 +402,16 @@ def _make_full_attention_mask(
 
   Args:
     input: The input tokens.
-    prev_turns: The previous turns.
     cache_length: The maximum length of the sequence.
 
   Returns:
     The full attention mask.
   """
-  # Mask out the padding tokens.
-  full_attention_mask = input.tokens_with_mm != _PADDING_ID
-
-  # Compute the full attention mask across turns.
-  if prev_turns:
-    full_attention_mask = jnp.concatenate(
-        [prev_turns.prev_attention_mask, full_attention_mask], axis=-1
-    )
-
-  # Pad the mask to the full `cache_length` for static shape.
-  full_attention_mask = _functional.pad(
-      full_attention_mask,
-      max_length=cache_length,
-      fill_value=True,
-  )
-  return full_attention_mask
+  # Since the cache is contiguous and contains no padding gaps,
+  # the attention mask is always all-ones across the entire cache length.
+  # We rely on the step mask (index < used_cache_length) to dynamically
+  # bound the attention range.
+  return jnp.ones((input.batch_size, cache_length), dtype=jnp.bool_)
 
 
 def _dtype(params: _common.Params) -> jnp.dtype:

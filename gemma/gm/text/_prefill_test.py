@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import dataclasses
-
 from gemma import gm
 from gemma.gm.text import _prefill
 from gemma.gm.text import _sampler_loop
@@ -92,17 +90,11 @@ def test_full_attention_mask():
 
   first_turn_mask = _prefill._make_full_attention_mask(
       input=input,
-      prev_turns=_turn_utils.PrevTurns(last_state=None),
       cache_length=20,
   )
   np.testing.assert_array_equal(
       first_turn_mask,
-      [
-          [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          [1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          [1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      ],
+      jnp.ones((4, 20), dtype=jnp.bool_),
   )
 
   last_state = _sampler_loop.SamplingState(
@@ -122,7 +114,7 @@ def test_full_attention_mask():
       cache={},
       rng=jax.random.PRNGKey(0),
       full_attention_mask=first_turn_mask,
-      init_cache_length=jnp.asarray(input.length_with_mm - 1),
+      init_cache_length=input.last_token_pos,
   )
   masked_full_attention_mask = (
       _sampler_loop._mask_full_attention_mask_prefix_for_next_turn(
@@ -136,26 +128,17 @@ def test_full_attention_mask():
       [
           [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
           [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-          [1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-          [1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       ],
-  )
-  last_state = dataclasses.replace(
-      last_state, full_attention_mask=masked_full_attention_mask
   )
 
   second_turn_mask = _prefill._make_full_attention_mask(
       input=input,
-      prev_turns=_turn_utils.PrevTurns(last_state=last_state),
       cache_length=20,
   )
   np.testing.assert_array_equal(
       second_turn_mask,
-      [
-          [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          [1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-          [1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1],
-          [1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1],
-      ],
+      jnp.ones((4, 20), dtype=jnp.bool_),
   )
 
